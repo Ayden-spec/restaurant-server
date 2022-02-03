@@ -1,0 +1,17 @@
+{
+    "serverPort": 5000,
+
+    "MYSQL_HOST": "XXXXXXXXXX",
+    "MYSQL_USER": "XXXXXXXXXX",
+    "MYSQL_DB_NAME": "XXXXXXXXXX",
+    "MYSQL_PASS": "XXXXXXXXXX",
+    "MYSQL_ConnectionLimit": 151,
+    "MYSQL_waitForConnections": true,
+    "MYSQL_queueLimit": 0,
+    "MYSQL_Timeout": 6000,
+
+    "secret_key":"XXXXXXXXXX",
+
+
+    "site_domain":"XXXXXXXXXX:3000"
+}
