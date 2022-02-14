@@ -150,9 +150,9 @@ router.get('/recomandation', async (req, res) => {
     }
 })
 
-router.post('/product-id', async (req, res) => {
+router.get('/product-id/:id', async (req, res) => {
     try {
-        mysqls.executeQuery(`SELECT products.* FROM products WHERE product_id = '${req.body.id}'`, function (err, rows, fields) {
+        mysqls.executeQuery(`SELECT products.* FROM products WHERE product_id = '${req.params.id}'`, function (err, rows, fields) {
             if (err) {
                 console.log('[DATABASE | ERROR] ' + err);
                 return;
@@ -160,26 +160,8 @@ router.post('/product-id', async (req, res) => {
             if (rows.length === 0) {
                 return res.status(404).json({ message: "404 NOT FOUND" });
             }
-            let product = rows[0];
-            if (req.body.token) {
-                const decoded = jwt.verify(req.body.token, config.get('secret_key'));
-                var sql = `SELECT products.*, basket.value AS basket FROM recommendations JOIN products ON products.product_id = recommendations.product_id LEFT OUTER JOIN basket ON basket.product_id = recommendations.product_id AND basket.user_id = '${decoded.id}'`
-            } else {
-                var sql = `SELECT products.* FROM recommendations JOIN products ON products.product_id = recommendations.product_id`
-            }
-            mysqls.executeQuery(sql, function (err, rows, fields) {
-                if (err) {
-                    console.log('[DATABASE | ERROR] ' + err);
-                    return;
-                }
-                if (rows.length === 0) {
-                    return res.status(400).json({ message: "404 NOT FOUND" })
-                }
-                let recommendations = rows
-                return res.json({
-                    product,
-                    recommendations
-                })
+            return res.json({
+                product: rows[0]
             })
         });
     } catch (e) {
@@ -209,23 +191,18 @@ router.get('/promotion', async (req, res) => {
     }
 })
 
-router.post('/product-add', async (req, res) => {
+router.post('/product-add/:product_id', authMidleware, async (req, res) => {
     try {
-        if (req.body.token) {
-            const decoded = jwt.verify(req.body.token, config.get('secret_key'));
-            mysqls.executeQuery(`SELECT basket.* FROM basket WHERE basket.product_id = '${req.body.product_id}' AND basket.user_id = '${decoded.id}' LIMIT 1`, function (err, rows, fields) {
-                if (err) {
-                    console.log('[DATABASE | ERROR] ' + err);
-                    return;
-                }
-                if (rows.length === 0) {
-                    mysqls.executeQuery(`INSERT INTO basket (product_id, user_id, value) VALUES ('${req.body.product_id}', '${decoded.id}', 1)`)
-                }
-                return res.json({ message: 'Товар успешно добален!' })
-            });
-        } else {
-            return res.status(400).json({ message: "Вы не авторизованы!" })
-        }
+        mysqls.executeQuery(`SELECT basket.* FROM basket WHERE basket.product_id = '${req.params.product_id}' AND basket.user_id = '${req.user.id}' LIMIT 1`, function (err, rows, fields) {
+            if (err) {
+                console.log('[DATABASE | ERROR] ' + err);
+                return;
+            }
+            if (rows.length === 0) {
+                mysqls.executeQuery(`INSERT INTO basket (product_id, user_id, value) VALUES ('${req.params.product_id}', '${req.user.id}', 1)`)
+            }
+            return res.json({ message: 'Товар успешно добален!' })
+        });
     } catch (e) {
         console.log(e);
         res.send({ message: "server error" })
@@ -233,101 +210,81 @@ router.post('/product-add', async (req, res) => {
 })
 
 
-router.post('/product-plus', async (req, res) => {
+router.put('/product-plus/:product_id', authMidleware, async (req, res) => {
     try {
-        if (req.body.token) {
-            const decoded = jwt.verify(req.body.token, config.get('secret_key'));
-            mysqls.executeQuery(`SELECT basket.* FROM basket WHERE basket.product_id = '${req.body.product_id}' AND basket.user_id = '${decoded.id}' LIMIT 1`, function (err, rows, fields) {
-                if (err) {
-                    console.log('[DATABASE | ERROR] ' + err);
-                    return;
-                }
-                if (rows.length === 0) {
-                    mysqls.executeQuery(`INSERT INTO basket (product_id, user_id, value) VALUES ('${req.body.product_id}', '${decoded.id}', 1)`)
+        mysqls.executeQuery(`SELECT basket.* FROM basket WHERE basket.product_id = '${req.params.product_id}' AND basket.user_id = '${req.user.id}' LIMIT 1`, function (err, rows, fields) {
+            if (err) {
+                console.log('[DATABASE | ERROR] ' + err);
+                return;
+            }
+            if (rows.length === 0) {
+                mysqls.executeQuery(`INSERT INTO basket (product_id, user_id, value) VALUES ('${req.params.product_id}', '${req.user.id}', 1)`)
+            } else {
+                mysqls.executeQuery(`UPDATE basket SET basket.value = basket.value + 1 WHERE basket.product_id = '${req.params.product_id}' AND basket.user_id = '${req.user.id}'`)
+            }
+            return res.json({ message: 'Товар успешно добален!' })
+        });
+    } catch (e) {
+        console.log(e);
+        res.send({ message: "server error" })
+    }
+})
+
+router.put('/product-minus/:product_id', authMidleware, async (req, res) => {
+    try {
+        mysqls.executeQuery(`SELECT basket.* FROM basket WHERE basket.product_id = '${req.params.product_id}' AND basket.user_id = '${req.user.id}' LIMIT 1`, function (err, rows, fields) {
+            if (err) {
+                console.log('[DATABASE | ERROR] ' + err);
+                return;
+            }
+            if (rows.length === 0) {
+                return res.status(400).json({ message: "Товар не найден!" })
+            } else {
+                if (rows[0].value === 1) {
+                    mysqls.executeQuery(`DELETE FROM basket WHERE basket.product_id = '${req.params.product_id}' AND basket.user_id = '${req.user.id}'`)
                 } else {
-                    mysqls.executeQuery(`UPDATE basket SET basket.value = basket.value + 1 WHERE basket.product_id = '${req.body.product_id}' AND basket.user_id = '${decoded.id}'`)
+                    mysqls.executeQuery(`UPDATE basket SET basket.value = basket.value - 1 WHERE basket.product_id = '${req.params.product_id}' AND basket.user_id = '${req.user.id}'`)
                 }
-                return res.json({ message: 'Товар успешно добален!' })
-            });
-        } else {
-            return res.status(400).json({ message: "Вы не авторизованы!" })
-        }
+            }
+            return res.json({ message: 'Предмет успешно убран!' })
+        });
     } catch (e) {
         console.log(e);
         res.send({ message: "server error" })
     }
 })
 
-router.post('/product-minus', async (req, res) => {
+router.delete('/product-delete/:product_id', authMidleware, async (req, res) => {
     try {
-        if (req.body.token) {
-            const decoded = jwt.verify(req.body.token, config.get('secret_key'));
-            mysqls.executeQuery(`SELECT basket.* FROM basket WHERE basket.product_id = '${req.body.product_id}' AND basket.user_id = '${decoded.id}' LIMIT 1`, function (err, rows, fields) {
-                if (err) {
-                    console.log('[DATABASE | ERROR] ' + err);
-                    return;
-                }
-                if (rows.length === 0) {
-                    return res.status(400).json({ message: "Товар не найден!" })
-                } else {
-                    if (rows[0].value === 1) {
-                        mysqls.executeQuery(`DELETE FROM basket WHERE basket.product_id = '${req.body.product_id}' AND basket.user_id = '${decoded.id}'`)
-                    } else {
-                        mysqls.executeQuery(`UPDATE basket SET basket.value = basket.value - 1 WHERE basket.product_id = '${req.body.product_id}' AND basket.user_id = '${decoded.id}'`)
-                    }
-                }
-                return res.json({ message: 'Предмет успешно убран!' })
-            });
-        } else {
-            return res.status(400).json({ message: "Вы не авторизованы!" })
-        }
+        mysqls.executeQuery(`SELECT basket.* FROM basket WHERE basket.product_id = '${req.params.product_id}' AND basket.user_id = '${req.user.id}' LIMIT 1`, function (err, rows, fields) {
+            if (err) {
+                console.log('[DATABASE | ERROR] ' + err);
+                return;
+            }
+            if (rows.length === 0) {
+                return res.status(400).json({ message: "Товар не найден!" })
+            }
+            mysqls.executeQuery(`DELETE FROM basket WHERE basket.product_id = '${req.params.product_id}' AND basket.user_id = '${req.user.id}'`)
+            return res.json({ message: 'Предмет успешно удален!' })
+        });
     } catch (e) {
         console.log(e);
         res.send({ message: "server error" })
     }
 })
 
-router.post('/product-delete', async (req, res) => {
+router.get('/get-basket', authMidleware, async (req, res) => {
     try {
-        if (req.body.token) {
-            const decoded = jwt.verify(req.body.token, config.get('secret_key'));
-            mysqls.executeQuery(`SELECT basket.* FROM basket WHERE basket.product_id = '${req.body.product_id}' AND basket.user_id = '${decoded.id}' LIMIT 1`, function (err, rows, fields) {
-                if (err) {
-                    console.log('[DATABASE | ERROR] ' + err);
-                    return;
-                }
-                if (rows.length === 0) {
-                    return res.status(400).json({ message: "Товар не найден!" })
-                }
-                mysqls.executeQuery(`DELETE FROM basket WHERE basket.product_id = '${req.body.product_id}' AND basket.user_id = '${decoded.id}'`)
-                return res.json({ message: 'Предмет успешно удален!' })
-            });
-        } else {
-            return res.status(400).json({ message: "Вы не авторизованы!" })
-        }
-    } catch (e) {
-        console.log(e);
-        res.send({ message: "server error" })
-    }
-})
-
-router.post('/get-basket', async (req, res) => {
-    try {
-        if (req.body.token) {
-            const decoded = jwt.verify(req.body.token, config.get('secret_key'));
-            mysqls.executeQuery(`SELECT basket.value AS basket, products.product_id, products.name, products.description, products.price, products.image FROM basket, products WHERE products.product_id = basket.product_id AND basket.user_id = '${decoded.id}'`, function (err, rows, fields) {
-                if (err) {
-                    console.log('[DATABASE | ERROR] ' + err);
-                    return;
-                }
-                if (rows.length === 0) {
-                    return res.status(400).json({ message: "Товар не найден!" })
-                }
-                return res.json({ basket: rows })
-            });
-        } else {
-            return res.status(400).json({ message: "Вы не авторизованы!" })
-        }
+        mysqls.executeQuery(`SELECT basket.value AS basket, products.product_id, products.name, products.description, products.price, products.image FROM basket, products WHERE products.product_id = basket.product_id AND basket.user_id = '${req.user.id}'`, function (err, rows, fields) {
+            if (err) {
+                console.log('[DATABASE | ERROR] ' + err);
+                return;
+            }
+            if (rows.length === 0) {
+                return res.status(400).json({ message: "Товар не найден!" })
+            }
+            return res.json({ basket: rows })
+        });
     } catch (e) {
         console.log(e);
         res.send({ message: "server error" })
