@@ -59,11 +59,7 @@ router.post('/login', async (req, res) => {
 
             const token = jwt.sign({ id: rows[0].id }, config.get("secret_key"), { expiresIn: "1h" })
             return res.json({
-                token,
-                user: {
-                    id: rows[0].id,
-                    email: rows[0].email
-                }
+                token
             })
         });
     } catch (e) {
@@ -84,11 +80,7 @@ router.get('/auth', authMidleware, async (req, res) => {
             }
             const token = jwt.sign({ id: rows[0].id }, config.get("secret_key"), { expiresIn: "1h" })
             return res.json({
-                token,
-                user: {
-                    id: rows[0].id,
-                    email: rows[0].email
-                }
+                token
             })
         });
     } catch (e) {
@@ -284,6 +276,91 @@ router.get('/get-basket', authMidleware, async (req, res) => {
                 return res.status(400).json({ message: "Товар не найден!" })
             }
             return res.json({ basket: rows })
+        });
+    } catch (e) {
+        console.log(e);
+        res.send({ message: "server error" })
+    }
+})
+
+
+router.put('/update-user-info', authMidleware, async (req, res) => {
+    try {
+        mysqls.executeQuery(`SELECT users.* FROM users WHERE users.id = '${req.user.id}' LIMIT 1`, function (err, rows, fields) {
+            if (err) {
+                console.log('[DATABASE | ERROR] ' + err);
+                return;
+            }
+            if (rows.length === 0) {
+                return res.status(400).json({ message: "Пользователь не найден!" })
+            } else {
+                mysqls.executeQuery(`UPDATE users SET name='${req.body.name}', number='${req.body.number}', street='${req.body.street}', house_number='${req.body.house_number}', apartment_number='${req.body.apartment_number}', entrance='${req.body.entrance}', floor='${req.body.floor}' WHERE users.id = '${req.user.id}'`)
+                mysqls.executeQuery(`DELETE FROM basket WHERE basket.user_id = '${req.user.id}'`)
+            }
+            return res.json({ message: 'Данные успешно обновлены!' })
+        });
+    } catch (e) {
+        console.log(e);
+        res.send({ message: "server error" })
+    }
+})
+
+router.post('/add-order', async (req, res) => {
+    try {
+        if (req.body.basket.length === 0) {
+            return res.status(400).json({ message: "Корзина пуста" })
+        }
+        mysqls.executeQuery(`SELECT orders.* FROM orders WHERE orders.phone_number='${req.body.phone_number}' LIMIT 1`, function (err, rows, fields) {
+            if (err) {
+                console.log('[DATABASE | ERROR] ' + err);
+                return;
+            }
+            if (rows.length === 0) {
+                mysqls.executeQuery(`INSERT INTO orders (phone_number, name, delivery_type, street, house_number, apartment_number, entrance, floor, comment, 
+                payment_type, cash_change, when_deliver_type, number_persons, time_delivery, checkbox_call, time) 
+                VALUES ('${req.body.phone_number}', '${req.body.name}', '${req.body.delivery_type}', '${req.body.street}', '${req.body.house_number}', 
+                '${req.body.apartment_number}', '${req.body.entrance}', '${req.body.floor}', '${req.body.comment}', '${req.body.payment_type}', 
+                '${req.body.cash_change}', '${req.body.when_deliver_type}', '${req.body.number_persons}', '${req.body.time_delivery}', '${req.body.call}', NOW())`);
+                req.body.basket.forEach(element => {
+                    mysqls.executeQuery(`INSERT INTO orders_products (phone_number, product_id, value) VALUES ('${req.body.phone_number}', '${element.product_id}', '${element.basket}')`)
+                });
+            } else {
+                mysqls.executeQuery(`DELETE FROM orders_products WHERE orders_products.phone_number = '${req.body.phone_number}'`)
+                mysqls.executeQuery(`UPDATE orders SET name='${req.body.name}', delivery_type='${req.body.delivery_type}', street='${req.body.street}', house_number='${req.body.house_number}', 
+                apartment_number='${req.body.apartment_number}', entrance='${req.body.entrance}', floor='${req.body.floor}', comment='${req.body.comment}', payment_type='${req.body.payment_type}',
+                cash_change='${req.body.cash_change}', when_deliver_type='${req.body.when_deliver_type}', number_persons='${req.body.number_persons}', time_delivery='${req.body.time_delivery}' ,
+                checkbox_call='${req.body.call}', time='${req.body.time}', time = NOW() WHERE orders.phone_number='${req.body.phone_number}'`);
+                req.body.basket.forEach(element => {
+                    mysqls.executeQuery(`INSERT INTO orders_products (phone_number, product_id, value) VALUES ('${req.body.phone_number}', '${element.product_id}', '${element.basket}')`)
+                });
+            }
+            return res.json({ message: 'Заказ оформлен!!' })
+        });
+    } catch (e) {
+        console.log(e);
+        res.send({ message: "server error" })
+    }
+})
+
+router.get('/get-user-info', authMidleware, async (req, res) => {
+    try {
+        mysqls.executeQuery(`SELECT * FROM users WHERE id = '${req.user.id}' LIMIT 1`, function (err, rows, fields) {
+            if (err) {
+                console.log('[DATABASE | ERROR] ' + err);
+                return;
+            }
+            if (rows.length === 0) {
+                return res.status(400).json({ message: "Пользователь не найден." })
+            }
+            return res.json({
+                name: rows[0].name,
+                number: rows[0].number,
+                street: rows[0].street,
+                house_number: rows[0].house_number,
+                apartment_number: rows[0].apartment_number,
+                entrance: rows[0].entrance,
+                floor: rows[0].floor
+            })
         });
     } catch (e) {
         console.log(e);
